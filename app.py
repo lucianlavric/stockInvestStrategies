@@ -30,13 +30,13 @@ if selected_player:
     # Trade input
     stock_name = st.text_input("Stock Ticker (e.g., AAPL, TSLA):")
     trade_type = st.selectbox("Trade Type:", ["Buy", "Sell"])
-    trade_amount = st.number_input("Investment Amount ($):", min_value=1, step=100)
+    shares = st.number_input("Number of Shares:", min_value=1, step=1)
     
     if st.button("Submit Trade") and stock_name:
         stock_data = yf.Ticker(stock_name).history(period='1d')
         if not stock_data.empty:
             stock_price = stock_data['Close'].iloc[-1]
-            shares = trade_amount / stock_price
+            trade_amount = shares * stock_price
             trade = {"stock": stock_name, "type": trade_type, "amount": trade_amount, "shares": shares, "price": stock_price}
             player['trades'].append(trade)
             
@@ -46,7 +46,7 @@ if selected_player:
             else:
                 player['portfolio_value'] += trade_amount
             
-            st.success(f"Trade recorded: {trade_type} {shares:.2f} shares of {stock_name} at ${stock_price:.2f}")
+            st.success(f"Trade recorded: {trade_type} {shares} shares of {stock_name} at ${stock_price:.2f}")
         else:
             st.error("Invalid stock ticker. Try again.")
     
