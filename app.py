@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+from datetime import datetime
 
 # Initialize session state for users' portfolios
 if 'players' not in st.session_state:
@@ -52,7 +53,8 @@ if st.session_state.players:  # Only show if there are players
                             "price": stock_price,
                             "entry_time": entry_time,
                             "exit_time": None,
-                            "time_diff": None
+                            "time_diff": None,
+                            "date": entry_time.date()  # Add date to check for day trading
                         }
 
                         if trade_type == "Buy":
@@ -138,13 +140,65 @@ if st.session_state.players:  # Only show if there are players
             except Exception as e:
                 st.error(f"Error displaying stock chart: {str(e)}")
 
-    # Display leaderboard
-    st.subheader("🏅 Leaderboard")
-    leaderboard = pd.DataFrame(
-        [(name, data['portfolio_value']) for name, data in st.session_state.players.items()],
-        columns=["Player", "Portfolio Value"]
-    ).sort_values(by="Portfolio Value", ascending=False)
-    leaderboard['Portfolio Value'] = leaderboard['Portfolio Value'].map('${:,.2f}'.format)
-    st.dataframe(leaderboard)
-else:
-    st.info("No players have joined yet. Be the first to join!")
+    # Function for applying penalties
+    def apply_penalties(player):
+        score = 0
+        portfolio_change = (player['portfolio_value'] - 100000) / 1000  # Each 1% = 1 pt
+        score += portfolio_change
+        
+        # Penalty: Overtrading (more than 20 trades)
+        if len(player['trades']) > 20:
+            score -= 5
+        
+        # Bonus: Diversification (more than 5 different stocks)
+        stock_count = len(set([trade['stock'] for trade in player['trades']]))
+        if stock_count >= 5:
+            score += 3
+        
+        # Penalty: Reckless Investing (more than 3 trades over 50,000)
+        large_trades = [trade for trade in player['trades'] if trade['shares'] * trade['price'] > 50000]
+        if len(large_trades) > 3:
+            score -= 7
+        
+        # Bonus: Beating the Market
+        market_ticker = yf.Ticker("^GSPC")  # S&P 500 Index
+        market_change = (market_ticker.history(period='1d')['Close'].iloc[-1] - 100000) / 1000
+        if portfolio_change > market_change:
+            score += 10
+        else:
+            score -= 5
+        
+        # Day trading penalty: Check if a player bought and sold on the same day
+        day_trade_penalty = 0
+        day_trading_flag = False  # Initialize flag for day trading
+        for trade in player['trades']:
+            if trade['type'] == "Sell":
+                # Check if there's a buy on the same date
+                buy_trades_on_same_day = [
+                    t for t in player['trades'] if t['stock'] == trade['stock'] and t['type'] == "Buy" and t['date'] == trade['date']
+                ]
+                if buy_trades_on_same_day:
+                    day_trade_penalty += 5  # Deduct 5 points for day trading
+                    day_trading_flag = True  # Set flag to True when day trading occurs
+        
+        # Display day trading flag if triggered
+        if day_trading_flag:
+            st.warning("Day trading detected! A penalty has been applied.")
+        
+        # Subtract the day trade penalty from the score
+        score -= day_trade_penalty
+        
+        return max(0, score)  # Ensure score is not negative
+
+    # Apply penalties and calculate the final score
+    player['score'] = apply_penalties(player)
+    st.write(f"Fantasy Score: {player['score']:.2f}")
+
+# Display leaderboard
+st.subheader("🏅 Leaderboard")
+leaderboard = pd.DataFrame(
+    [(name, data['score'], data['portfolio_value']) for name, data in st.session_state.players.items()],
+    columns=["Player", "Score", "Portfolio Value"]
+).sort_values(by="Score", ascending=False)
+
+st.dataframe(leaderboard)
