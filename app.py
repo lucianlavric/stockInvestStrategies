@@ -143,22 +143,17 @@ def get_stock_price_and_beta(stock_name):
 
 # Basic scoring functions - these need to be defined before they're used
 def calculate_portfolio_score(player):
-    """Calculate portfolio score based on percentage change relative to initial stock prices."""
-    total_percentage_change = 0
-    num_trades = 0
+    """Calculate portfolio score based on percentage change weighted by initial stock price."""
+    total_score = 0
     for trade in player['trades']:
         if trade['type'] == 'Buy':
             current_price, _ = get_stock_price_and_beta(trade['stock'])
             if current_price is not None and trade['initial_price'] != 0:  # Avoid division by zero
                 percentage_change = ((current_price - trade['initial_price']) / trade['initial_price']) * 100
-                total_percentage_change += percentage_change
-                num_trades += 1
+                score_contribution = percentage_change * trade['initial_price'] # Weight by initial price
+                total_score += score_contribution
 
-    if num_trades > 0:
-        average_percentage_change = total_percentage_change / num_trades
-        return average_percentage_change
-    else:
-        return 0  # Return 0 if no buy trades to avoid division by zero
+    return total_score
 
 def calculate_overtrading_penalty(player):
     return 5 if len(player['trades']) > 20 else 0
@@ -212,6 +207,11 @@ def calculate_market_performance_bonus(player):
 
 def apply_penalties(player):
     score = calculate_portfolio_score(player)
+
+    # Add initial score contributions from trades
+    initial_score_bonus = sum(trade.get("initial_score_contribution", 0) for trade in player['trades'])
+    score += initial_score_bonus
+
     score -= calculate_overtrading_penalty(player)
     score -= calculate_reckless_investing_penalty(player)
     score -= calculate_day_trading_penalty(player)
@@ -290,11 +290,16 @@ def execute_trade(player, stock_name, trade_type, shares):
             "exit_time": None,
             "time_diff": None,
             "date": entry_time,
-            "initial_price": stock_price # Store initial price
+            "initial_price": stock_price, # Store initial price
+            "initial_score_contribution": 0 # Initialize initial score contribution
         }
+
+        # Calculate initial score contribution based on stock price and beta
+        initial_score_contribution = stock_price * (1 - (beta if beta is not None else 1)/5) # Example formula
+        trade["initial_score_contribution"] = initial_score_contribution
         player['trades'].append(trade)
         player['portfolio_value'] -= trade_amount
-        st.success(f"Buy order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}")
+        st.success(f"Buy order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}. Initial score contribution: {initial_score_contribution:.2f}")
 
     elif trade_type == "Sell":
         process_sell_trade(player, stock_name, shares, entry_time, stock_price)
