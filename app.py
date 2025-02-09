@@ -6,6 +6,7 @@ import json
 import os
 import datetime
 import plotly.express as px
+import time  # Import the time module
 
 USER_DATA_FILE = 'user_data.json'
 
@@ -67,6 +68,9 @@ def save_user_data():
         # Log the error for debugging
         print(f"Error saving user data: {str(e)}")
 
+import streamlit as st
+
+@st.cache_data
 def initialize_session():
     """Initialize session state with improved error handling"""
     if 'user_data' not in st.session_state:
@@ -83,7 +87,7 @@ def initialize_session():
         try:
             with open(USER_DATA_FILE, 'r') as file:
                 loaded_data = json.load(file)
-                
+
             # Deserialize the loaded data
             st.session_state.user_data = {}
             for email, user_data in loaded_data.items():
@@ -95,7 +99,7 @@ def initialize_session():
                         print(f"Error deserializing trades for {email}: {str(e)}")
                         deserialized_user['trades'] = []
                 st.session_state.user_data[email] = deserialized_user
-                
+
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {str(e)}")
             print(e)
@@ -106,7 +110,7 @@ def initialize_session():
             print(e)
             st.session_state.user_data = {}
             st.error(f"An error occurred loading user data: {str(e)}")
-    
+
     # Ensure that every user has required fields
     for user_data in st.session_state.user_data.values():
         if 'portfolio_value' not in user_data:
@@ -130,16 +134,27 @@ def add_new_player():
             st.warning("Player already exists!")
 
 # Function to get stock price and beta
+@st.cache_data(ttl=600)  # Cache for 10 minutes (600 seconds)
 def get_stock_price_and_beta(stock_name):
-    try:
-        stock_ticker = yf.Ticker(stock_name)
-        stock_data = stock_ticker.history(period='1d')
-        price = stock_data['Close'].iloc[-1] if not stock_data.empty else None
-        beta = stock_ticker.info.get('beta') # Use .get() to avoid KeyError if beta is not available
-        return price, beta
-    except Exception as e:
-        print(f"Error fetching stock data for {stock_name}: {e}")
-        return None, None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            time.sleep(1)  # Introduce a 1-second delay
+            stock_ticker = yf.Ticker(stock_name)
+            stock_data = stock_ticker.history(period='1d')
+            price = stock_data['Close'].iloc[-1] if not stock_data.empty else None
+            beta = stock_ticker.info.get('beta')
+            return price, beta
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4 seconds
+                time.sleep(wait_time)
+                print(f"Retry {attempt + 1} for {stock_name} after error: {e}")
+            else:
+                error_message = f"Error fetching stock data for {stock_name} after multiple retries: {e}"
+                print(error_message)
+                st.error(error_message)
+                return None, None
 
 # Basic scoring functions - these need to be defined before they're used
 def calculate_portfolio_score(player):
@@ -337,6 +352,11 @@ def display_portfolio(player):
 
         penalty = calculate_day_trading_penalty(player)
         st.write(f"Day Trading Penalty: -{penalty} points")
+
+    overtrading_penalty = calculate_overtrading_penalty(player)
+    if overtrading_penalty > 0:
+        st.subheader("⚠️ Overtrading Penalty")
+        st.write(f"Overtrading Penalty: -{overtrading_penalty} points (More than 20 trades)")
 
     if player['trades']:
         st.subheader("Trade History")
