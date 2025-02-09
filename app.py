@@ -4,54 +4,105 @@ import yfinance as yf
 import hashlib
 import json
 import os
-from datetime import datetime
+import datetime
 
 USER_DATA_FILE = 'user_data.json'
 
-# Initialize session state
+def serialize_trade(trade):
+    """Convert trade data to a JSON serializable format."""
+    serialized_trade = trade.copy()
+
+    for key, value in serialized_trade.items():
+        print(f"Serializing key: {key}, value: {value}, type: {type(value)}")
+        if hasattr(value, 'isoformat'):
+            serialized_trade[key] = value.isoformat()
+        elif value is None:
+            serialized_trade[key] = None
+
+    return serialized_trade
+
+def deserialize_trade(serialized_trade):
+    """Convert serialized trade data back into a trade object."""
+    deserialized_trade = serialized_trade.copy()
+
+    for key, value in deserialized_trade.items():
+        if isinstance(value, str):
+            try:
+                # Attempt to parse date strings in ISO 8601 format
+                deserialized_trade[key] = pd.to_datetime(value)
+            except ValueError:
+                pass  # If it's not a valid date string, leave it as is
+        elif value is None:
+            # Ensure 'null' is converted to None in Python
+            deserialized_trade[key] = None
+
+    return deserialized_trade
+
+def save_user_data():
+    """Save user data to file with error handling"""
+    try:
+        serialized_data = {}
+        for email, user_data in st.session_state.user_data.items():
+            serialized_user = user_data.copy()
+            if 'trades' in user_data:
+                serialized_user['trades'] = [serialize_trade(trade) for trade in user_data['trades']]
+            serialized_data[email] = serialized_user
+
+        with open(USER_DATA_FILE, 'w') as file:
+            json.dump(serialized_data, file, indent=4)
+    except Exception as e:
+        st.error(f"Error saving user data: {str(e)}")
+        # Log the error for debugging
+        print(f"Error saving user data: {str(e)}")
+
 def initialize_session():
-    if 'players' not in st.session_state:
-        st.session_state.players = {}
+    """Initialize session state with improved error handling"""
+    if 'user_data' not in st.session_state:
+        st.session_state.user_data = {}
     if 'current_user' not in st.session_state:
         st.session_state.current_user = None
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
-    if 'name_entered' not in st.session_state:
-        st.session_state.name_entered = False  # Track if the user has entered their name
+    if 'players' not in st.session_state:
+        st.session_state.players = {}
 
     # Load user data from file if it exists
     if os.path.exists(USER_DATA_FILE):
         try:
             with open(USER_DATA_FILE, 'r') as file:
-                st.session_state.user_data = json.load(file)
-        except json.JSONDecodeError:
-            # If JSON is invalid, log the error and use an empty dictionary
+                loaded_data = json.load(file)
+                
+            # Deserialize the loaded data
             st.session_state.user_data = {}
-            st.error("Error reading user data from file. Using default empty data.")
+            for email, user_data in loaded_data.items():
+                deserialized_user = user_data.copy()
+                if 'trades' in user_data:
+                    try:
+                        deserialized_user['trades'] = [deserialize_trade(trade) for trade in user_data['trades']]
+                    except Exception as e:
+                        print(f"Error deserializing trades for {email}: {str(e)}")
+                        deserialized_user['trades'] = []
+                st.session_state.user_data[email] = deserialized_user
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {str(e)}")
+            print(e)
+            st.session_state.user_data = {}
+            st.error("Error reading user data file. Starting with empty data.")
         except Exception as e:
-            # Catch any other exceptions
+            print(f"Unexpected error loading user data: {str(e)}")
+            print(e)
             st.session_state.user_data = {}
-            st.error(f"An error occurred: {e}")
-    else:
-        st.session_state.user_data = {}
-
-    # Ensure that every user has 'portfolio_value' and 'trades'
+            st.error(f"An error occurred loading user data: {str(e)}")
+    
+    # Ensure that every user has required fields
     for user_data in st.session_state.user_data.values():
         if 'portfolio_value' not in user_data:
-            user_data['portfolio_value'] = 100000  # Initialize with a default value
+            user_data['portfolio_value'] = 100000
         if 'name' not in user_data:
             user_data['name'] = ""
         if 'trades' not in user_data:
-            user_data['trades'] = []
-
-# Save user data to file
-def save_user_data():
-    try:
-        with open(USER_DATA_FILE, 'w') as file:
-            json.dump(st.session_state.user_data, file, indent=4)  # Added indent for better readability
-    except Exception as e:
-        st.error(f"Error saving user data: {e}")
-
+            user_data['trades'] = []# [Rest of your existing code remains the same...]
 # Function to add a new player
 def add_new_player():
     player_name = st.text_input("Enter your name to join:")
@@ -93,22 +144,22 @@ def get_day_trades(player):
     day_trades = {}
     for trade in player['trades']:
         if trade['type'] == "Sell":
-            date = trade['date']
+            date = trade['date'].date()
             stock = trade['stock']
-            
+
             # Find buy trades for the same stock on the same day
-            buy_trades = [t for t in player['trades'] 
-                         if t['stock'] == stock 
-                         and t['type'] == "Buy" 
-                         and t['date'] == date]
-            
+            buy_trades = [t for t in player['trades']
+                         if t['stock'] == stock
+                         and t['type'] == "Buy"
+                         and t['date'].date() == date]
+
             if buy_trades:
                 if date not in day_trades:
                     day_trades[date] = {}
                 if stock not in day_trades[date]:
                     day_trades[date][stock] = 0
                 day_trades[date][stock] += len(buy_trades)
-    
+
     return day_trades
 
 def calculate_day_trading_penalty(player):
@@ -169,10 +220,10 @@ def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
         "entry_time": entry_time,
         "exit_time": None,
         "time_diff": None,
-        "date": entry_time.date()
+        "date": entry_time
     }
     player['trades'].append(trade)
-    
+
     st.success(f"Sell order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}")
 
 # Function to execute a trade
@@ -181,7 +232,7 @@ def execute_trade(player, stock_name, trade_type, shares):
     if stock_price is None:
         st.error("Could not fetch stock data. Please check the ticker symbol.")
         return
-    
+
     trade_amount = shares * stock_price
     entry_time = pd.Timestamp.now()
 
@@ -189,7 +240,7 @@ def execute_trade(player, stock_name, trade_type, shares):
         if trade_amount > player['portfolio_value']:
             st.error("Insufficient funds for this trade!")
             return
-        
+
         trade = {
             "stock": stock_name,
             "type": trade_type,
@@ -198,12 +249,12 @@ def execute_trade(player, stock_name, trade_type, shares):
             "entry_time": entry_time,
             "exit_time": None,
             "time_diff": None,
-            "date": entry_time.date()
+            "date": entry_time
         }
         player['trades'].append(trade)
         player['portfolio_value'] -= trade_amount
         st.success(f"Buy order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}")
-    
+
     elif trade_type == "Sell":
         process_sell_trade(player, stock_name, shares, entry_time, stock_price)
 
@@ -214,6 +265,7 @@ def display_portfolio(player):
     
     # Display day trading activity
     day_trades = get_day_trades(player)
+    print(f"Day trades: {day_trades}") # Debug print
     if day_trades:
         st.subheader("⚠️ Day Trading Activity")
         st.write("Same-day buy and sell transactions:")
@@ -221,10 +273,10 @@ def display_portfolio(player):
             st.write(f"Date: {date}")
             for stock, trades in stocks.items():
                 st.write(f"- {stock}: {trades} trades")
-        
+
         penalty = calculate_day_trading_penalty(player)
         st.write(f"Day Trading Penalty: -{penalty} points")
-    
+
     if player['trades']:
         st.subheader("Trade History")
         trades_df = pd.DataFrame(player['trades'])
@@ -259,7 +311,8 @@ def display_stock_history(stock_name):
         except:
             st.error("Error fetching stock data. Please check the ticker symbol.")
 
-# Main function
+# Previous imports and functions remain the same until the main() function
+
 def main():
     initialize_session()
     st.title("Fantasy Stock League 🏆")
@@ -270,33 +323,36 @@ def main():
         
         if action == "Create Account":
             st.subheader("Create an Account")
-
             email = st.text_input("Enter your email:")
+            name = st.text_input("Enter your name:")
             password = st.text_input("Create a password:", type="password")
             confirm_password = st.text_input("Confirm your password:", type="password")
 
             if st.button("Create Account"):
-                if email and password:
+                if email and password and name:
                     if password != confirm_password:
                         st.error("Passwords do not match!")
                     elif email in st.session_state.user_data:
                         st.error("Email is already registered!")
                     else:
-                        # Store user email and hashed password
                         hashed_password = hashlib.sha256(password.encode()).hexdigest()
-                        st.session_state.user_data[email] = {'password': hashed_password, 'name': '', 'trades': []}
-                        st.session_state.current_user = email  # Auto-login after registration
+                        st.session_state.user_data[email] = {
+                            'password': hashed_password,
+                            'name': name,
+                            'trades': [],
+                            'portfolio_value': 100000,
+                            'score': 0
+                        }
+                        st.session_state.current_user = email
                         st.session_state.authenticated = True
-                        st.session_state.name_entered = False  # Proceed to name entry
-                        save_user_data()  # Save user data to file
-                        st.success(f"Account created successfully! Welcome, {email}!")
-                        st.rerun()  # Reload the page to show the name input page
+                        save_user_data()
+                        st.success(f"Account created successfully! Welcome, {name}!")
+                        st.rerun()
                 else:
-                    st.warning("Please enter both email and password.")
-        
+                    st.warning("Please enter email, name, and password.")
+
         elif action == "Sign In":
             st.subheader("Sign In")
-
             email = st.text_input("Enter your email:")
             password = st.text_input("Enter your password:", type="password")
 
@@ -306,45 +362,43 @@ def main():
                     if hashed_password == hashlib.sha256(password.encode()).hexdigest():
                         st.session_state.current_user = email
                         st.session_state.authenticated = True
-                        # If the user has already entered their name, no need to prompt them again
-                        if email in st.session_state.players:
-                            st.session_state.name_entered = True
-                        st.success(f"Welcome back, {email}!")
-                        st.rerun()  # Reload the page to show the name input page
+                        st.success(f"Welcome back, {st.session_state.user_data[email]['name']}!")
+                        st.rerun()
                     else:
                         st.error("Incorrect password!")
                 else:
                     st.error("Email not registered!")
-    
+
     elif st.session_state.authenticated:
-        # Add new player or manage existing player's portfolio
-        if not st.session_state.name_entered:
-            add_new_player()
+        # Get current user's data
+        current_user = st.session_state.current_user
+        player = st.session_state.user_data[current_user]
         
-        if st.session_state.players:
-            selected_player = st.selectbox("Select Player:", list(st.session_state.players.keys()))
-            if selected_player:
-                player = st.session_state.players[selected_player]
-                stock_name = st.text_input("Stock Ticker (e.g., AAPL, TSLA):")
-                trade_type = st.selectbox("Trade Type:", ["Buy", "Sell"])
-                shares = st.number_input("Number of Shares:", min_value=1, step=1)
+        # Display welcome message and user interface
+        st.write(f"Welcome, {player['name']}!")
+        
+        stock_name = st.text_input("Stock Ticker (e.g., AAPL, TSLA):")
+        trade_type = st.selectbox("Trade Type:", ["Buy", "Sell"])
+        shares = st.number_input("Number of Shares:", min_value=1, step=1)
 
-                # Display stock history chart above submit button
-                display_stock_history(stock_name)
+        # Display stock history chart above submit button
+        display_stock_history(stock_name)
 
-                if st.button("Submit Trade") and stock_name:
-                    execute_trade(player, stock_name, trade_type, shares)
-                
-                display_portfolio(player)
-                player['score'] = apply_penalties(player)
-                st.write(f"Fantasy Score: {player['score']:.2f}")
+        if st.button("Submit Trade") and stock_name:
+            execute_trade(player, stock_name, trade_type, shares)
+            save_user_data()  # Save after each trade
+
+        display_portfolio(player)
+        player['score'] = apply_penalties(player)
+        st.write(f"Fantasy Score: {player['score']:.2f}")
+        save_user_data()  # Save after score update
 
         # Logout button
         if st.button("Logout"):
-            st.session_state.clear()  # Clears all session state variables
+            st.session_state.clear()
             st.success("Logged out successfully.")
-            st.rerun()  # Rerun the app to return to the login screen
-        
+            st.rerun()
+
         display_leaderboard()
 
 if __name__ == "__main__":
