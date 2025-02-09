@@ -301,8 +301,10 @@ def execute_trade(player, stock_name, trade_type, shares):
 # Function to display the player's portfolio
 def display_portfolio(player):
     st.subheader("Portfolio Summary")
-    st.write(f"Portfolio Value: ${player['portfolio_value']:,.2f}")
-    
+    total_portfolio_value = calculate_total_portfolio_value(player)
+    st.write(f"Total Portfolio Value: ${total_portfolio_value:,.2f}")
+    st.write(f"Cash Balance: ${player['portfolio_value']:,.2f}") # Display cash balance separately
+
     # Display day trading activity
     day_trades = get_day_trades(player)
     print(f"Day trades: {day_trades}") # Debug print
@@ -324,6 +326,16 @@ def display_portfolio(player):
         st.dataframe(trades_df)
 
 # Display leaderboard function
+def calculate_total_portfolio_value(player):
+    """Calculates the total portfolio value including cash and stock holdings."""
+    portfolio_value = player['portfolio_value'] # Start with cash
+    for trade in player['trades']:
+        if trade['type'] == 'Buy' and trade['exit_time'] is None: # Consider only currently held stocks
+            current_price, _ = get_stock_price_and_beta(trade['stock'])
+            if current_price is not None:
+                portfolio_value += trade['shares'] * current_price # Add current value of stocks
+    return portfolio_value
+
 def display_leaderboard():
     st.subheader("🏅 Leaderboard")
     
@@ -334,10 +346,11 @@ def display_leaderboard():
     # Prepare leaderboard data
     leaderboard_data = []
     for email, user_data in st.session_state.user_data.items():
+        total_portfolio_value = calculate_total_portfolio_value(user_data)
         leaderboard_data.append({
             "Player": user_data['name'],
             "Score": user_data['score'],
-            "Portfolio Value": user_data['portfolio_value']
+            "Portfolio Value": total_portfolio_value
         })
 
     # Convert the list to a DataFrame and sort by Score in descending order
@@ -350,7 +363,7 @@ def display_leaderboard():
     leaderboard_df = leaderboard_df[['Rank', 'Player', 'Score', 'Portfolio Value']]
 
     # Display the leaderboard without index
-    st.table(leaderboard_df.set_index('Rank'))
+    st.dataframe(leaderboard_df.set_index('Rank'))
 
 
 # Function to display stock history graph
