@@ -326,10 +326,12 @@ def display_portfolio(player):
 # Display leaderboard function
 def display_leaderboard():
     st.subheader("🏅 Leaderboard")
+    
     if not st.session_state.user_data:
         st.write("No users registered yet.")
         return
 
+    # Prepare leaderboard data
     leaderboard_data = []
     for email, user_data in st.session_state.user_data.items():
         leaderboard_data.append({
@@ -338,8 +340,18 @@ def display_leaderboard():
             "Portfolio Value": user_data['portfolio_value']
         })
 
-    leaderboard = pd.DataFrame(leaderboard_data).sort_values(by="Score", ascending=False)
-    st.dataframe(leaderboard)
+    # Convert the list to a DataFrame and sort by Score in descending order
+    leaderboard_df = pd.DataFrame(leaderboard_data).sort_values(by="Score", ascending=False)
+
+    # Add a 'Rank' column based on the sorted order
+    leaderboard_df['Rank'] = range(1, len(leaderboard_df) + 1)
+
+    # Reorder columns to display rank first
+    leaderboard_df = leaderboard_df[['Rank', 'Player', 'Score', 'Portfolio Value']]
+
+    # Display the leaderboard without index
+    st.table(leaderboard_df.set_index('Rank'))
+
 
 # Function to display stock history graph
 def display_stock_history(stock_name):
