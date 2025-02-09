@@ -35,10 +35,148 @@
                 "entry_time": "2025-02-08T23:19:42.342009",
                 "exit_time": null,
                 "time_diff": null,
-                "date": "2025-02-08T23:19:42.342009"
+                "date": "2025-02-08T23:19:42.342009",
+                "initial_price": null
             }
         ],
         "portfolio_value": 99638.38000488281,
         "score": 6.0
+    },
+    "akdbc": {
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+        "name": "aaa",
+        "trades": [
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:26:44.437047",
+                "exit_time": "2025-02-08T23:26:58.267287",
+                "time_diff": "0 days 00:00:13.830240",
+                "date": "2025-02-08T23:26:44.437047",
+                "initial_price": 227.6300048828125
+            },
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:26:53.904899",
+                "exit_time": "2025-02-08T23:26:59.054454",
+                "time_diff": "0 days 00:00:05.149555",
+                "date": "2025-02-08T23:26:53.904899",
+                "initial_price": 227.6300048828125
+            },
+            {
+                "stock": "AAPL",
+                "type": "Sell",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "entry_time": "2025-02-08T23:26:58.267287",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:26:58.267287",
+                "initial_price": null
+            },
+            {
+                "stock": "AAPL",
+                "type": "Sell",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "entry_time": "2025-02-08T23:26:59.054454",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:26:59.054454",
+                "initial_price": null
+            },
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:28:31.511130",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:28:31.511130",
+                "initial_price": 227.6300048828125
+            },
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:29:20.787988",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:29:20.787988",
+                "initial_price": 227.6300048828125
+            }
+        ],
+        "portfolio_value": 54473.9990234375,
+        "score": 17.0
+    },
+    "aibud": {
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+        "name": "auisbd",
+        "trades": [
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:31:52.649395",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:31:52.649395",
+                "initial_price": 227.6300048828125
+            }
+        ],
+        "portfolio_value": 77236.99951171875,
+        "score": 13.0
+    },
+    "oahd": {
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+        "name": "aksbc",
+        "trades": [
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:33:13.687149",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:33:13.687149",
+                "initial_price": 227.6300048828125
+            },
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 100,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:33:14.427847",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:33:14.427847",
+                "initial_price": 227.6300048828125
+            }
+        ],
+        "portfolio_value": 54473.9990234375,
+        "score": 16.0
+    },
+    "sodibfhc": {
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+        "name": "sidubc",
+        "trades": [],
+        "portfolio_value": 100000,
+        "score": 10
     }
 }
