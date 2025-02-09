@@ -70,7 +70,6 @@ def save_user_data():
 
 import streamlit as st
 
-@st.cache_data
 def initialize_session():
     """Initialize session state with improved error handling"""
     if 'user_data' not in st.session_state:
@@ -110,6 +109,12 @@ def initialize_session():
             print(e)
             st.session_state.user_data = {}
             st.error(f"An error occurred loading user data: {str(e)}")
+    
+    # Recalculate scores and penalties after loading user data
+    for email in st.session_state.user_data:
+        player = st.session_state.user_data[email]
+        player['score'] = apply_penalties(player)
+    save_user_data()
 
     # Ensure that every user has required fields
     for user_data in st.session_state.user_data.values():
@@ -118,8 +123,8 @@ def initialize_session():
         if 'name' not in user_data:
             user_data['name'] = ""
         if 'trades' not in user_data:
-            user_data['trades'] = []# [Rest of your existing code remains the same...]
-# Function to add a new player
+            user_data['trades'] = []
+# Function to add a new player():
 def add_new_player():
     player_name = st.text_input("Enter your name to join:")
     if st.button("Join League") and player_name:
@@ -171,7 +176,38 @@ def calculate_portfolio_score(player):
     return total_score
 
 def calculate_overtrading_penalty(player):
-    return 5 if len(player['trades']) > 20 else 0
+    num_trades = len(player['trades'])
+    print(f"calculate_overtrading_penalty - START - Number of trades: {num_trades}")
+    print(f"calculate_overtrading_penalty - Trades list: {player['trades']}") # Print trades list for inspection
+    current_portfolio_value = calculate_total_portfolio_value(player)
+    print(f"calculate_overtrading_penalty - Portfolio Value: {current_portfolio_value}") # Print portfolio value
+    
+    if num_trades > 20:
+        penalty_percentage = 0.10
+        penalty_amount = current_portfolio_value * penalty_percentage
+        print(f"calculate_overtrading_penalty - Overtrading penalty applied: {penalty_amount}") # Print penalty amount
+        return penalty_amount
+    else:
+        print("calculate_overtrading_penalty - No penalty applied (trades <= 20)")
+        return 0
+
+import pandas as pd
+
+def calculate_overtrading_penalty(player):
+    today_date = pd.Timestamp.now().date()
+    today_trades = [trade for trade in player['trades'] if trade['date'].date() == today_date]
+    num_today_trades = len(today_trades)
+    print(f"calculate_overtrading_penalty - START - Number of trades today: {num_today_trades}") # Debug print
+
+    if num_today_trades >= 20:
+        penalty_percentage = 0.10
+        initial_scores_sum_today = sum(trade.get("initial_score_contribution", 0) for trade in today_trades)
+        penalty_amount = initial_scores_sum_today * penalty_percentage
+        print(f"calculate_overtrading_penalty - Overtrading penalty applied: {penalty_amount}") # Debug print
+        return penalty_amount
+    else:
+        print(f"calculate_overtrading_penalty - No penalty applied (trades < 20)") # Debug print
+        return 0
 
 def calculate_reckless_investing_penalty(player):
     large_trades = [trade for trade in player['trades'] if trade['shares'] * trade['price'] > 50000]
@@ -230,28 +266,54 @@ def calculate_market_performance_bonus(player):
     return 0
 
 def apply_penalties(player):
+    print(f"apply_penalties - START - Number of trades: {len(player['trades'])}") # Debug print
     score = calculate_portfolio_score(player)
+    print(f"apply_penalties - Initial Score: {score}")
 
-    # Add initial score contributions from trades
     initial_score_bonus = sum(trade.get("initial_score_contribution", 0) for trade in player['trades'])
     score += initial_score_bonus
+    print(f"apply_penalties - Score after initial bonus: {score}")
+
+    overtrading_penalty = calculate_overtrading_penalty(player)
+    print(f"apply_penalties - Overtrading Penalty: {overtrading_penalty}")
+    score -= overtrading_penalty
+    print(f"apply_penalties - Score after overtrading penalty: {score}")
+
+    reckless_investing_penalty = calculate_reckless_investing_penalty(player)
+    print(f"apply_penalties - Reckless Investing Penalty: {reckless_investing_penalty}")
+    score -= reckless_investing_penalty
+    print(f"apply_penalties - Score after reckless investing penalty: {score}")
 
     day_trading_penalty = calculate_day_trading_penalty(player)
-    score -= calculate_overtrading_penalty(player)
-    score -= calculate_reckless_investing_penalty(player)
-    score -= day_trading_penalty # Apply day trading penalty
-    score += calculate_diversification_bonus(player)
-    score += calculate_market_performance_bonus(player)
+    print(f"apply_penalties - Day Trading Penalty: {day_trading_penalty}")
+    score -= day_trading_penalty
+    print(f"apply_penalties - Score after day trading penalty: {score}")
 
-    # Adjust score based on beta values of stocks in portfolio
+    diversification_bonus = calculate_diversification_bonus(player)
+    print(f"apply_penalties - Diversification Bonus: {diversification_bonus}")
+    score += diversification_bonus
+    print(f"apply_penalties - Score after diversification bonus: {score}")
+
+    market_performance_bonus = calculate_market_performance_bonus(player)
+    print(f"apply_penalties - Market Performance Bonus: {market_performance_bonus}")
+    score += market_performance_bonus
+    print(f"apply_penalties - Score after market performance bonus: {score}")
+
     for trade in player['trades']:
         if trade['type'] == 'Buy' and trade['beta'] is not None:
             if trade['beta'] >= 2:
-                score -= 2  # Apply penalty for high beta stocks (risky)
+                score -= 2
+                print(f"apply_penalties - High Beta Penalty for {trade['stock']}: -2")
             else:
-                score += 3   # Apply bonus for low beta stocks (conservative)
+                score += 3
+                print(f"apply_penalties - Low Beta Bonus for {trade['stock']}: +3")
 
-    return max(0, score)
+    print(f"apply_penalties - Score before final adjustment: {score}") # Score before min/max adjustments
+    final_score = max(0, score) # Ensure score is not negative
+    final_score = min(final_score, 100000) # Cap the score at 100000 - arbitrarily high max score for reasonable gameplay
+    print(f"apply_penalties - Final Score: {final_score}")
+    print(f"apply_penalties - Score being returned: {final_score}")
+    return final_score
 
 # Function to process a sell trade
 def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
@@ -331,6 +393,7 @@ def execute_trade(player, stock_name, trade_type, shares):
 
     elif trade_type == "Sell":
         process_sell_trade(player, stock_name, shares, entry_time, stock_price)
+        print(f"Number of trades after sell trade execution: {len(player['trades'])}")  # Debug print after sell trade
 
 # Function to display the player's portfolio
 def display_portfolio(player):
@@ -353,10 +416,19 @@ def display_portfolio(player):
         penalty = calculate_day_trading_penalty(player)
         st.write(f"Day Trading Penalty: -{penalty} points")
 
+    print("Calculating overtrading penalty...")  # Debug print
     overtrading_penalty = calculate_overtrading_penalty(player)
+    print(f"Overtrading penalty value: {overtrading_penalty}")  # Debug print
+    print(f"Number of trades: {len(player['trades'])}")  # Debug print
+    print("Overtrading penalty is being displayed...")  # Debug print
+    print(f"Overtrading penalty: {overtrading_penalty}") # Debug print
+    print(f"display_portfolio - Number of trades: {len(player['trades'])}")
+    print(f"display_portfolio - Overtrading penalty value: {overtrading_penalty}")
     if overtrading_penalty > 0:
         st.subheader("⚠️ Overtrading Penalty")
-        st.write(f"Overtrading Penalty: -{overtrading_penalty} points (More than 20 trades)")
+        st.write(f"Overtrading Penalty Value: ${overtrading_penalty:.2f}")
+        st.write(f"Overtrading Penalty: -{overtrading_penalty:.2f} points (More than 20 trades)")
+
 
     if player['trades']:
         st.subheader("Trade History")
@@ -368,11 +440,14 @@ def display_portfolio(player):
 def calculate_total_portfolio_value(player):
     """Calculates the total portfolio value including cash and stock holdings."""
     portfolio_value = player['portfolio_value'] # Start with cash
+    print(f"calculate_total_portfolio_value - Initial cash: {portfolio_value}")
     for trade in player['trades']:
         if trade['type'] == 'Buy' and trade['exit_time'] is None: # Consider only currently held stocks
             current_price, _ = get_stock_price_and_beta(trade['stock'])
+            print(f"calculate_total_portfolio_value - Stock: {trade['stock']}, Shares: {trade['shares']}, Current Price: {current_price}")
             if current_price is not None:
                 portfolio_value += trade['shares'] * current_price # Add current value of stocks
+    print(f"calculate_total_portfolio_value - Final portfolio value: {portfolio_value}")
     return portfolio_value
 
 def display_leaderboard():
@@ -420,21 +495,27 @@ def display_stock_history(stock_name):
 
 # Previous imports and functions remain the same until the main() function
 
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def prefetch_stock_data(stock_list):
+    """Prefetches stock data for a list of stock tickers."""
+    for stock_name in stock_list:
+        get_stock_price_and_beta(stock_name)
+
 def display_stock_spread(player):
     """Displays a pie chart of the player's stock holdings."""
     stock_counts = {}
-    
+
     # Loop through the player's trades and calculate the total number of shares for each stock
     for trade in player['trades']:
         if trade['type'] == 'Buy':
             if trade['stock'] not in stock_counts:
                 stock_counts[trade['stock']] = 0
             stock_counts[trade['stock']] += trade['shares']
-    
+
     if not stock_counts:
         st.write("No stock holdings to display.")
         return
-    
+
     # Create a DataFrame for the pie chart
     stock_df = pd.DataFrame(list(stock_counts.items()), columns=['Stock', 'Shares'])
 
@@ -476,6 +557,10 @@ def main():
                         st.session_state.authenticated = True
                         save_user_data()
                         st.success(f"Account created successfully! Welcome, {name}!")
+                        # Prefetch stock data after account creation
+                        user_trades = st.session_state.user_data[email]['trades']
+                        stock_list = list(set([trade['stock'] for trade in user_trades])) if user_trades else []
+                        prefetch_stock_data(stock_list)
                         st.rerun()
                 else:
                     st.warning("Please enter email, name, and password.")
@@ -492,6 +577,10 @@ def main():
                         st.session_state.current_user = email
                         st.session_state.authenticated = True
                         st.success(f"Welcome back, {st.session_state.user_data[email]['name']}!")
+                        # Prefetch stock data after login
+                        user_trades = st.session_state.user_data[email]['trades']
+                        stock_list = list(set([trade['stock'] for trade in user_trades])) if user_trades else []
+                        prefetch_stock_data(stock_list)
                         st.rerun()
                     else:
                         st.error("Incorrect password!")
@@ -518,10 +607,13 @@ def main():
             execute_trade(player, stock_name, trade_type, shares)
             save_user_data()  # Save after each trade
 
-        display_portfolio(player)
+        print("Before apply_penalties") # Debug print
         player['score'] = apply_penalties(player)
+        print("After apply_penalties, score:", player['score']) # Debug print
+        display_portfolio(player)
         st.write(f"Fantasy Score: {player['score']:.2f}")
         save_user_data()  # Save after score update
+        print("After save_user_data") # Debug print
 
         if st.button("Logout"):
             st.session_state.clear()
