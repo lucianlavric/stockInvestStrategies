@@ -26,6 +26,7 @@ pandas==2.2.3
 peewee==3.17.9
 pillow==11.1.0
 platformdirs==4.3.6
+plotly==6.0.0
 protobuf==5.29.3
 pyarrow==19.0.0
 pydeck==0.9.1
@@ -48,4 +49,3 @@ tzdata==2025.1
 urllib3==2.3.0
 webencodings==0.5.1
 yfinance==0.2.52
-plotly==5.0.0
