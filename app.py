@@ -11,36 +11,41 @@ USER_DATA_FILE = 'user_data.json'
 def serialize_trade(trade):
     """Convert trade data to a JSON serializable format."""
     serialized_trade = trade.copy()
-
+    
+    # Convert specific datetime objects and handle None values
     for key, value in serialized_trade.items():
+        print(f"Serializing - Key: {key}, Value: {value}, Type: {type(value)}") # Debug print
         if isinstance(value, datetime.datetime):  # Check for datetime objects
             serialized_trade[key] = value.isoformat()
+        elif isinstance(value, pd.Timedelta):  # Check for Timedelta objects
+            serialized_trade[key] = str(value)  # Convert Timedelta to string
+            print(f"Serialized Timedelta - Key: {key}, Value: {serialized_trade[key]}, Type: {type(serialized_trade[key])}") # Debug print
         elif value is None:
             serialized_trade[key] = None
-        # Beta value is already serializable (float or None)
-        # initial_price is already serializable (float or None)
-
+            
     return serialized_trade
 
 def deserialize_trade(serialized_trade):
     """Convert serialized trade data back into a trade object."""
     deserialized_trade = serialized_trade.copy()
-
+    
     for key, value in deserialized_trade.items():
-        if isinstance(value, str):
+        print(f"Deserializing - Key: {key}, Value: {value}, Type: {type(value)}") # Debug print
+        if isinstance(value, str) and key in ['date', 'entry_time', 'exit_time']:
             try:
-                # Attempt to parse date strings in ISO 8601 format
                 deserialized_trade[key] = pd.to_datetime(value)
             except ValueError:
-                pass
+                deserialized_trade[key] = None
+        elif key == 'time_diff' and isinstance(value, str):
+            deserialized_trade[key] = value # Keep time_diff as string
+            print(f"Deserialized time_diff - Key: {key}, Value: {deserialized_trade[key]}, Type: {type(deserialized_trade[key])}") # Debug print
         elif value is None:
             deserialized_trade[key] = None
-        # Beta value is deserialized as is (float or None)
-        # initial_price is deserialized as is (float or None)
-        if 'initial_price' not in deserialized_trade:
-            deserialized_trade['initial_price'] = None
-
-
+            
+    # Ensure initial_price exists
+    if 'initial_price' not in deserialized_trade:
+        deserialized_trade['initial_price'] = None
+        
     return deserialized_trade
 
 def save_user_data():
@@ -55,6 +60,7 @@ def save_user_data():
 
         with open(USER_DATA_FILE, 'w') as file:
             json.dump(serialized_data, file, indent=4)
+        print("Serialized data saved successfully") # Debug print
     except Exception as e:
         st.error(f"Error saving user data: {str(e)}")
         # Log the error for debugging

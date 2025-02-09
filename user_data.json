@@ -1,0 +1,44 @@
+{
+    "lukamagic": {
+        "password": "d580754468330f66e5c155e16968a2be2a7828eca0885b42a0ce356594bfeab9",
+        "name": "luka",
+        "trades": [
+            {
+                "stock": "TSLA",
+                "type": "Buy",
+                "shares": 1,
+                "price": 361.6199951171875,
+                "beta": 2.295,
+                "entry_time": "2025-02-08T23:19:28.092101",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:19:28.092101",
+                "initial_price": 361.6199951171875
+            },
+            {
+                "stock": "AAPL",
+                "type": "Buy",
+                "shares": 1,
+                "price": 227.6300048828125,
+                "beta": 1.24,
+                "entry_time": "2025-02-08T23:19:36.238433",
+                "exit_time": "2025-02-08T23:19:42.342009",
+                "time_diff": "0 days 00:00:06.103576",
+                "date": "2025-02-08T23:19:36.238433",
+                "initial_price": 227.6300048828125
+            },
+            {
+                "stock": "AAPL",
+                "type": "Sell",
+                "shares": 1,
+                "price": 227.6300048828125,
+                "entry_time": "2025-02-08T23:19:42.342009",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-08T23:19:42.342009"
+            }
+        ],
+        "portfolio_value": 99638.38000488281,
+        "score": 6.0
+    }
+}
