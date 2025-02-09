@@ -189,8 +189,17 @@ def get_day_trades(player):
 
 def calculate_day_trading_penalty(player):
     day_trades = get_day_trades(player)
-    penalty = sum(len(stocks) * 5 for stocks in day_trades.values())
-    return penalty
+    total_penalty = 0
+    for date, stocks in day_trades.items():  # Use date from the dictionary key
+        for stock, trade_count in stocks.items():
+            sell_trade = next((t for t in player['trades']
+                               if t['stock'] == stock
+                               and t['type'] == 'Sell'
+                               and t['date'].date() == date), None)
+            if sell_trade:
+                penalty_per_share = sell_trade['price'] * 0.30  # Increased to 30% penalty
+                total_penalty += penalty_per_share * trade_count
+    return total_penalty
 
 def calculate_market_performance_bonus(player):
     try:
@@ -212,9 +221,10 @@ def apply_penalties(player):
     initial_score_bonus = sum(trade.get("initial_score_contribution", 0) for trade in player['trades'])
     score += initial_score_bonus
 
+    day_trading_penalty = calculate_day_trading_penalty(player)
     score -= calculate_overtrading_penalty(player)
     score -= calculate_reckless_investing_penalty(player)
-    score -= calculate_day_trading_penalty(player)
+    score -= day_trading_penalty # Apply day trading penalty
     score += calculate_diversification_bonus(player)
     score += calculate_market_performance_bonus(player)
 
