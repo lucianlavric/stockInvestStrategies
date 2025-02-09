@@ -295,7 +295,10 @@ def execute_trade(player, stock_name, trade_type, shares):
         }
 
         # Calculate initial score contribution based on stock price and beta
-        initial_score_contribution = stock_price * (1 - (beta if beta is not None else 1)/5) # Example formula
+        if beta is not None and beta >= 2:
+            initial_score_contribution = stock_price * (1 - (beta / 2.5)) # Increased penalty for high beta
+        else:
+            initial_score_contribution = stock_price * (1 - (beta if beta is not None else 1)/5)
         trade["initial_score_contribution"] = initial_score_contribution
         player['trades'].append(trade)
         player['portfolio_value'] -= trade_amount
