@@ -241,15 +241,27 @@ def get_day_trades(player):
 def calculate_day_trading_penalty(player):
     day_trades = get_day_trades(player)
     total_penalty = 0
-    for date, stocks in day_trades.items():  # Use date from the dictionary key
+    print(f"calculate_day_trading_penalty - START - Day Trades: {day_trades}")
+    if not day_trades:  # Check if day_trades is empty
+        print("calculate_day_trading_penalty - No day trades found, penalty is 0")
+        return 0
+
+    for date, stocks in day_trades.items():
+        print(f"calculate_day_trading_penalty - Date: {date}, Type: {type(date)}, Stocks: {stocks}")
         for stock, trade_count in stocks.items():
             sell_trade = next((t for t in player['trades']
                                if t['stock'] == stock
                                and t['type'] == 'Sell'
                                and t['date'].date() == date), None)
+            print(f"calculate_day_trading_penalty - Sell Trade: {sell_trade}, Type: {type(sell_trade)}")
             if sell_trade:
-                penalty_per_share = sell_trade['price'] * 0.30  # Increased to 30% penalty
-                total_penalty += penalty_per_share * trade_count
+                print(f"calculate_day_trading_penalty - Sell Trade Date: {sell_trade['date']}, Type: {type(sell_trade['date'])}")
+                print(f"calculate_day_trading_penalty - Date from day_trades: {date}, Type: {type(date)}")
+                penalty_per_share = sell_trade['price'] * 0.30
+                penalty_for_stock = penalty_per_share * trade_count
+                print(f"calculate_day_trading_penalty - Stock: {stock}, Trade Count: {trade_count}, Penalty per share: {penalty_per_share}, Penalty for stock: {penalty_for_stock}")
+                total_penalty += penalty_for_stock
+    print(f"calculate_day_trading_penalty - Total Day Trading Penalty: {total_penalty}")
     return total_penalty
 
 def calculate_market_performance_bonus(player):
@@ -266,9 +278,9 @@ def calculate_market_performance_bonus(player):
     return 0
 
 def apply_penalties(player):
-    print(f"apply_penalties - START - Number of trades: {len(player['trades'])}") # Debug print
+    print(f"apply_penalties - START - Number of trades: {len(player['trades'])}")
     score = calculate_portfolio_score(player)
-    print(f"apply_penalties - Initial Score: {score}")
+    print(f"apply_penalties - Initial Score (portfolio score): {score}")
 
     initial_score_bonus = sum(trade.get("initial_score_contribution", 0) for trade in player['trades'])
     score += initial_score_bonus
@@ -286,8 +298,10 @@ def apply_penalties(player):
 
     day_trading_penalty = calculate_day_trading_penalty(player)
     print(f"apply_penalties - Day Trading Penalty: {day_trading_penalty}")
+    score_before_day_trade_penalty = score
+    print(f"apply_penalties - Score before day trade penalty: {score_before_day_trade_penalty}") # Debugging line
     score -= day_trading_penalty
-    print(f"apply_penalties - Score after day trading penalty: {score}")
+    print(f"apply_penalties - Score after day trading penalty: {score}") # Debugging line
 
     diversification_bonus = calculate_diversification_bonus(player)
     print(f"apply_penalties - Diversification Bonus: {diversification_bonus}")
@@ -308,9 +322,9 @@ def apply_penalties(player):
                 score += 3
                 print(f"apply_penalties - Low Beta Bonus for {trade['stock']}: +3")
 
-    print(f"apply_penalties - Score before final adjustment: {score}") # Score before min/max adjustments
+    print(f"apply_penalties - Score before final adjustment: {score}")
     final_score = max(0, score) # Ensure score is not negative
-    final_score = min(final_score, 100000) # Cap the score at 100000 - arbitrarily high max score for reasonable gameplay
+    final_score = min(final_score, 100000) # Cap the score - arbitrarily high max score for reasonable gameplay
     print(f"apply_penalties - Final Score: {final_score}")
     print(f"apply_penalties - Score being returned: {final_score}")
     return final_score
@@ -339,8 +353,21 @@ def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
 
     player['portfolio_value'] += trade_amount
 
-    # Deduct initial score contribution upon selling
+    # Deduct initial score contribution upon selling - REMOVE THIS LINE
     player['score'] -= initial_score_contribution_deduction
+    score_change = -initial_score_contribution_deduction
+
+    print(f"process_sell_trade - Score before potential deduction: {player['score']}", flush=True) # Debug print - forced flush
+    st.write(f"Debug - process_sell_trade - Score before potential deduction: {player['score']}") # Streamlit debug output
+    print(f"process_sell_trade - initial_score_contribution_deduction: {initial_score_contribution_deduction}", flush=True) # Debug print - forced flush
+    st.write(f"Debug - process_sell_trade - initial_score_contribution_deduction: {initial_score_contribution_deduction}") # Streamlit debug output
+    print(f"process_sell_trade - score_change: {score_change}", flush=True) # Debug print - forced flush
+    st.write(f"Debug - process_sell_trade - score_change: {score_change}") # Streamlit debug output
+    print(f"process_sell_trade - Before apply_penalties call, current score: {player['score']}", flush=True) # Debug print - forced flush
+    st.write(f"Debug - process_sell_trade - Before apply_penalties call, current score: {player['score']}") # Streamlit debug output
+    player['score'] = apply_penalties(player) # Recalculate score after sell
+    print(f"process_sell_trade - Score after recalculating penalties: {player['score']}", flush=True) # Debug print - forced flush
+    st.write(f"Debug - process_sell_trade - Score after recalculating penalties: {player['score']}") # Streamlit debug output
 
     # Add sell trade to history
     trade = {
@@ -352,11 +379,14 @@ def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
         "exit_time": None,
         "time_diff": None,
         "date": entry_time,
-        "initial_score_contribution_deduction": initial_score_contribution_deduction # Record deduction for audit
+        "initial_score_contribution_deduction": initial_score_contribution_deduction, # Record deduction for audit
+        "score_change": score_change # Record score change for sell
     }
+    print(f"process_sell_trade - BEFORE APPEND - trade['score_change']: {trade['score_change']}") # Debug print
+    st.write(f"Debug - process_sell_trade - BEFORE APPEND - trade['score_change']: {trade['score_change']}") # Streamlit debug output
     player['trades'].append(trade)
 
-    st.success(f"Sell order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}. Score deduction: {initial_score_contribution_deduction:.2f}")
+    st.success(f"Sell order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}. Score deduction: {initial_score_contribution_deduction:.2f}, Score Change: {score_change:.2f}")
 
 # Function to execute a trade
 def execute_trade(player, stock_name, trade_type, shares):
@@ -393,6 +423,7 @@ def execute_trade(player, stock_name, trade_type, shares):
         else:
             initial_score_contribution = stock_price * (1 - (beta if beta is not None else 1)/5)
         trade["initial_score_contribution"] = initial_score_contribution
+        trade["score_change"] = initial_score_contribution
         player['trades'].append(trade)
         player['portfolio_value'] -= trade_amount
         st.success(f"Buy order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}. Initial score contribution: {initial_score_contribution:.2f}")
@@ -440,6 +471,8 @@ def display_portfolio(player):
         st.subheader("Trade History")
         trades_df = pd.DataFrame(player['trades'])
         trades_df['time_diff'] = trades_df['time_diff'].astype(str)
+        trades_df['score_change'] = trades_df['score_change'].fillna(0) # Ensure NaN values are 0 for display
+        trades_df['Cumulative Score Change'] = trades_df['score_change'].cumsum()
         trades_df.index = trades_df.index + 1
         st.dataframe(trades_df)
 
