@@ -13,11 +13,12 @@ def serialize_trade(trade):
     serialized_trade = trade.copy()
 
     for key, value in serialized_trade.items():
-        print(f"Serializing key: {key}, value: {value}, type: {type(value)}")
-        if hasattr(value, 'isoformat'):
+        if isinstance(value, datetime.datetime):  # Check for datetime objects
             serialized_trade[key] = value.isoformat()
         elif value is None:
             serialized_trade[key] = None
+        # Beta value is already serializable (float or None)
+        # initial_price is already serializable (float or None)
 
     return serialized_trade
 
@@ -31,10 +32,14 @@ def deserialize_trade(serialized_trade):
                 # Attempt to parse date strings in ISO 8601 format
                 deserialized_trade[key] = pd.to_datetime(value)
             except ValueError:
-                pass  # If it's not a valid date string, leave it as is
+                pass
         elif value is None:
-            # Ensure 'null' is converted to None in Python
             deserialized_trade[key] = None
+        # Beta value is deserialized as is (float or None)
+        # initial_price is deserialized as is (float or None)
+        if 'initial_price' not in deserialized_trade:
+            deserialized_trade['initial_price'] = None
+
 
     return deserialized_trade
 
@@ -117,18 +122,36 @@ def add_new_player():
         else:
             st.warning("Player already exists!")
 
-# Function to get stock price
-def get_stock_price(stock_name):
+# Function to get stock price and beta
+def get_stock_price_and_beta(stock_name):
     try:
-        stock_data = yf.Ticker(stock_name).history(period='1d')
-        return stock_data['Close'].iloc[-1] if not stock_data.empty else None
-    except:
-        return None
+        stock_ticker = yf.Ticker(stock_name)
+        stock_data = stock_ticker.history(period='1d')
+        price = stock_data['Close'].iloc[-1] if not stock_data.empty else None
+        beta = stock_ticker.info.get('beta') # Use .get() to avoid KeyError if beta is not available
+        return price, beta
+    except Exception as e:
+        print(f"Error fetching stock data for {stock_name}: {e}")
+        return None, None
 
 # Basic scoring functions - these need to be defined before they're used
 def calculate_portfolio_score(player):
-    initial_portfolio_value = 100000
-    return ((player['portfolio_value'] - initial_portfolio_value) / initial_portfolio_value) * 100
+    """Calculate portfolio score based on percentage change relative to initial stock prices."""
+    total_percentage_change = 0
+    num_trades = 0
+    for trade in player['trades']:
+        if trade['type'] == 'Buy':
+            current_price, _ = get_stock_price_and_beta(trade['stock'])
+            if current_price is not None and trade['initial_price'] != 0:  # Avoid division by zero
+                percentage_change = ((current_price - trade['initial_price']) / trade['initial_price']) * 100
+                total_percentage_change += percentage_change
+                num_trades += 1
+
+    if num_trades > 0:
+        average_percentage_change = total_percentage_change / num_trades
+        return average_percentage_change
+    else:
+        return 0  # Return 0 if no buy trades to avoid division by zero
 
 def calculate_overtrading_penalty(player):
     return 5 if len(player['trades']) > 20 else 0
@@ -187,6 +210,15 @@ def apply_penalties(player):
     score -= calculate_day_trading_penalty(player)
     score += calculate_diversification_bonus(player)
     score += calculate_market_performance_bonus(player)
+
+    # Adjust score based on beta values of stocks in portfolio
+    for trade in player['trades']:
+        if trade['type'] == 'Buy' and trade['beta'] is not None:
+            if trade['beta'] >= 2:
+                score -= 2  # Apply penalty for high beta stocks (risky)
+            else:
+                score += 3   # Apply bonus for low beta stocks (conservative)
+
     return max(0, score)
 
 # Function to process a sell trade
@@ -228,7 +260,7 @@ def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
 
 # Function to execute a trade
 def execute_trade(player, stock_name, trade_type, shares):
-    stock_price = get_stock_price(stock_name)
+    stock_price, beta = get_stock_price_and_beta(stock_name)
     if stock_price is None:
         st.error("Could not fetch stock data. Please check the ticker symbol.")
         return
@@ -246,10 +278,12 @@ def execute_trade(player, stock_name, trade_type, shares):
             "type": trade_type,
             "shares": shares,
             "price": stock_price,
+            "beta": beta, # Store beta value
             "entry_time": entry_time,
             "exit_time": None,
             "time_diff": None,
-            "date": entry_time
+            "date": entry_time,
+            "initial_price": stock_price # Store initial price
         }
         player['trades'].append(trade)
         player['portfolio_value'] -= trade_amount
