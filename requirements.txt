@@ -48,3 +48,4 @@ tzdata==2025.1
 urllib3==2.3.0
 webencodings==0.5.1
 yfinance==0.2.52
+plotly==5.0.0

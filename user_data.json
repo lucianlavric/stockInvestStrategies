@@ -261,9 +261,21 @@
                 "time_diff": null,
                 "date": "2025-02-09T00:07:05.498950",
                 "initial_price": 32.27000045776367
+            },
+            {
+                "stock": "BP",
+                "type": "Buy",
+                "shares": 1,
+                "price": 32.27000045776367,
+                "beta": 0.506,
+                "entry_time": "2025-02-09T00:10:15.159909",
+                "exit_time": null,
+                "time_diff": null,
+                "date": "2025-02-09T00:10:15.159909",
+                "initial_price": 32.27000045776367
             }
         ],
-        "portfolio_value": 91345.85998725891,
-        "score": 69.0
+        "portfolio_value": 91313.58998680115,
+        "score": 72.0
     }
 }
