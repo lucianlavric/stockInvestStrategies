@@ -317,26 +317,31 @@ def apply_penalties(player):
 
 # Function to process a sell trade
 def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
-    available_shares = sum(t['shares'] for t in player['trades'] 
+    available_shares = sum(t['shares'] for t in player['trades']
                          if t['stock'] == stock_name and t['type'] == 'Buy' and t['exit_time'] is None)
-    
+
     if shares > available_shares:
         st.error(f"You only have {available_shares} shares available to sell")
         return
-    
+
     trade_amount = shares * stock_price
     shares_to_sell = shares
-    
+    initial_score_contribution_deduction = 0
+
     for t in player['trades']:
-        if (t['stock'] == stock_name and t['type'] == 'Buy' and 
+        if (t['stock'] == stock_name and t['type'] == 'Buy' and
             t['exit_time'] is None and shares_to_sell > 0):
             shares_sold = min(shares_to_sell, t['shares'])
             t['exit_time'] = entry_time
             t['time_diff'] = entry_time - t['entry_time']
             shares_to_sell -= shares_sold
-    
+            initial_score_contribution_deduction += t.get('initial_score_contribution', 0) * (shares_sold / t['shares']) # Deduct proportionally
+
     player['portfolio_value'] += trade_amount
-    
+
+    # Deduct initial score contribution upon selling
+    player['score'] -= initial_score_contribution_deduction
+
     # Add sell trade to history
     trade = {
         "stock": stock_name,
@@ -346,11 +351,12 @@ def process_sell_trade(player, stock_name, shares, entry_time, stock_price):
         "entry_time": entry_time,
         "exit_time": None,
         "time_diff": None,
-        "date": entry_time
+        "date": entry_time,
+        "initial_score_contribution_deduction": initial_score_contribution_deduction # Record deduction for audit
     }
     player['trades'].append(trade)
 
-    st.success(f"Sell order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}")
+    st.success(f"Sell order recorded: {shares} shares of {stock_name} at ${stock_price:.2f}. Score deduction: {initial_score_contribution_deduction:.2f}")
 
 # Function to execute a trade
 def execute_trade(player, stock_name, trade_type, shares):
@@ -434,6 +440,7 @@ def display_portfolio(player):
         st.subheader("Trade History")
         trades_df = pd.DataFrame(player['trades'])
         trades_df['time_diff'] = trades_df['time_diff'].astype(str)
+        trades_df.index = trades_df.index + 1
         st.dataframe(trades_df)
 
 # Display leaderboard function
@@ -502,25 +509,37 @@ def prefetch_stock_data(stock_list):
         get_stock_price_and_beta(stock_name)
 
 def display_stock_spread(player):
-    """Displays a pie chart of the player's stock holdings."""
+    """Displays a pie chart of the player's stock holdings, showing only open buy positions."""
     stock_counts = {}
+    open_buy_trades = []
+    sold_stocks = set()
 
-    # Loop through the player's trades and calculate the total number of shares for each stock
+    # Identify stocks that have been sold
     for trade in player['trades']:
-        if trade['type'] == 'Buy':
-            if trade['stock'] not in stock_counts:
-                stock_counts[trade['stock']] = 0
-            stock_counts[trade['stock']] += trade['shares']
+        if trade['type'] == 'Sell':
+            sold_stocks.add(trade['stock'])
+
+    # Filter out buy trades for stocks that have been sold
+    for trade in player['trades']:
+        if trade['type'] == 'Buy' and trade['stock'] not in sold_stocks:
+            open_buy_trades.append(trade)
+
+    # Calculate stock counts for open buy trades
+    for trade in open_buy_trades:
+        if trade['stock'] not in stock_counts:
+            stock_counts[trade['stock']] = 0
+        stock_counts[trade['stock']] += trade['shares']
 
     if not stock_counts:
-        st.write("No stock holdings to display.")
-        return
-
-    # Create a DataFrame for the pie chart
-    stock_df = pd.DataFrame(list(stock_counts.items()), columns=['Stock', 'Shares'])
+        st.write("No open stock holdings to display.")
+        stock_df = pd.DataFrame({'Stock': [], 'Shares': []}) # Create empty DataFrame
+    else:
+        # Create a DataFrame for the pie chart
+        stock_df = pd.DataFrame(list(stock_counts.items()), columns=['Stock', 'Shares'])
+    stock_df.index = stock_df.index + 1
 
     # Create the pie chart using Plotly
-    fig = px.pie(stock_df, names='Stock', values='Shares', title='Stock Holdings Distribution')
+    fig = px.pie(stock_df, names='Stock', values='Shares', title='Open Stock Holdings Distribution (Buy Trades Only)')
     st.plotly_chart(fig)
 
 def main():
@@ -606,6 +625,7 @@ def main():
         if st.button("Submit Trade") and stock_name:
             execute_trade(player, stock_name, trade_type, shares)
             save_user_data()  # Save after each trade
+            st.rerun() # Rerun to update chart immediately
 
         print("Before apply_penalties") # Debug print
         player['score'] = apply_penalties(player)
