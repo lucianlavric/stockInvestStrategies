@@ -1,12 +1,56 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import hashlib
+import json
+import os
 from datetime import datetime
+
+USER_DATA_FILE = 'user_data.json'
 
 # Initialize session state
 def initialize_session():
     if 'players' not in st.session_state:
         st.session_state.players = {}
+    if 'current_user' not in st.session_state:
+        st.session_state.current_user = None
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'name_entered' not in st.session_state:
+        st.session_state.name_entered = False  # Track if the user has entered their name
+
+    # Load user data from file if it exists
+    if os.path.exists(USER_DATA_FILE):
+        try:
+            with open(USER_DATA_FILE, 'r') as file:
+                st.session_state.user_data = json.load(file)
+        except json.JSONDecodeError:
+            # If JSON is invalid, log the error and use an empty dictionary
+            st.session_state.user_data = {}
+            st.error("Error reading user data from file. Using default empty data.")
+        except Exception as e:
+            # Catch any other exceptions
+            st.session_state.user_data = {}
+            st.error(f"An error occurred: {e}")
+    else:
+        st.session_state.user_data = {}
+
+    # Ensure that every user has 'portfolio_value' and 'trades'
+    for user_data in st.session_state.user_data.values():
+        if 'portfolio_value' not in user_data:
+            user_data['portfolio_value'] = 100000  # Initialize with a default value
+        if 'name' not in user_data:
+            user_data['name'] = ""
+        if 'trades' not in user_data:
+            user_data['trades'] = []
+
+# Save user data to file
+def save_user_data():
+    try:
+        with open(USER_DATA_FILE, 'w') as file:
+            json.dump(st.session_state.user_data, file, indent=4)  # Added indent for better readability
+    except Exception as e:
+        st.error(f"Error saving user data: {e}")
 
 # Function to add a new player
 def add_new_player():
@@ -219,27 +263,89 @@ def display_stock_history(stock_name):
 def main():
     initialize_session()
     st.title("Fantasy Stock League 🏆")
-    add_new_player()
+
+    # Initial Sign-in / Registration Page
+    if not st.session_state.authenticated:
+        action = st.radio("Select Action", ["Sign In", "Create Account"])
+        
+        if action == "Create Account":
+            st.subheader("Create an Account")
+
+            email = st.text_input("Enter your email:")
+            password = st.text_input("Create a password:", type="password")
+            confirm_password = st.text_input("Confirm your password:", type="password")
+
+            if st.button("Create Account"):
+                if email and password:
+                    if password != confirm_password:
+                        st.error("Passwords do not match!")
+                    elif email in st.session_state.user_data:
+                        st.error("Email is already registered!")
+                    else:
+                        # Store user email and hashed password
+                        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+                        st.session_state.user_data[email] = {'password': hashed_password, 'name': '', 'trades': []}
+                        st.session_state.current_user = email  # Auto-login after registration
+                        st.session_state.authenticated = True
+                        st.session_state.name_entered = False  # Proceed to name entry
+                        save_user_data()  # Save user data to file
+                        st.success(f"Account created successfully! Welcome, {email}!")
+                        st.rerun()  # Reload the page to show the name input page
+                else:
+                    st.warning("Please enter both email and password.")
+        
+        elif action == "Sign In":
+            st.subheader("Sign In")
+
+            email = st.text_input("Enter your email:")
+            password = st.text_input("Enter your password:", type="password")
+
+            if st.button("Sign In"):
+                if email in st.session_state.user_data:
+                    hashed_password = st.session_state.user_data[email]['password']
+                    if hashed_password == hashlib.sha256(password.encode()).hexdigest():
+                        st.session_state.current_user = email
+                        st.session_state.authenticated = True
+                        # If the user has already entered their name, no need to prompt them again
+                        if email in st.session_state.players:
+                            st.session_state.name_entered = True
+                        st.success(f"Welcome back, {email}!")
+                        st.rerun()  # Reload the page to show the name input page
+                    else:
+                        st.error("Incorrect password!")
+                else:
+                    st.error("Email not registered!")
     
-    if st.session_state.players:
-        selected_player = st.selectbox("Select Player:", list(st.session_state.players.keys()))
-        if selected_player:
-            player = st.session_state.players[selected_player]
-            stock_name = st.text_input("Stock Ticker (e.g., AAPL, TSLA):")
-            trade_type = st.selectbox("Trade Type:", ["Buy", "Sell"])
-            shares = st.number_input("Number of Shares:", min_value=1, step=1)
+    elif st.session_state.authenticated:
+        # Add new player or manage existing player's portfolio
+        if not st.session_state.name_entered:
+            add_new_player()
+        
+        if st.session_state.players:
+            selected_player = st.selectbox("Select Player:", list(st.session_state.players.keys()))
+            if selected_player:
+                player = st.session_state.players[selected_player]
+                stock_name = st.text_input("Stock Ticker (e.g., AAPL, TSLA):")
+                trade_type = st.selectbox("Trade Type:", ["Buy", "Sell"])
+                shares = st.number_input("Number of Shares:", min_value=1, step=1)
 
-            # Display stock history chart above submit button
-            display_stock_history(stock_name)
+                # Display stock history chart above submit button
+                display_stock_history(stock_name)
 
-            if st.button("Submit Trade") and stock_name:
-                execute_trade(player, stock_name, trade_type, shares)
-            
-            display_portfolio(player)
-            player['score'] = apply_penalties(player)
-            st.write(f"Fantasy Score: {player['score']:.2f}")
+                if st.button("Submit Trade") and stock_name:
+                    execute_trade(player, stock_name, trade_type, shares)
+                
+                display_portfolio(player)
+                player['score'] = apply_penalties(player)
+                st.write(f"Fantasy Score: {player['score']:.2f}")
 
-    display_leaderboard()
+        # Logout button
+        if st.button("Logout"):
+            st.session_state.clear()  # Clears all session state variables
+            st.success("Logged out successfully.")
+            st.rerun()  # Rerun the app to return to the login screen
+        
+        display_leaderboard()
 
 if __name__ == "__main__":
     main()
