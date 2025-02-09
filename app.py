@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import datetime
+import plotly.express as px
 
 USER_DATA_FILE = 'user_data.json'
 
@@ -381,6 +382,28 @@ def display_stock_history(stock_name):
 
 # Previous imports and functions remain the same until the main() function
 
+def display_stock_spread(player):
+    """Displays a pie chart of the player's stock holdings."""
+    stock_counts = {}
+    
+    # Loop through the player's trades and calculate the total number of shares for each stock
+    for trade in player['trades']:
+        if trade['type'] == 'Buy':
+            if trade['stock'] not in stock_counts:
+                stock_counts[trade['stock']] = 0
+            stock_counts[trade['stock']] += trade['shares']
+    
+    if not stock_counts:
+        st.write("No stock holdings to display.")
+        return
+    
+    # Create a DataFrame for the pie chart
+    stock_df = pd.DataFrame(list(stock_counts.items()), columns=['Stock', 'Shares'])
+
+    # Create the pie chart using Plotly
+    fig = px.pie(stock_df, names='Stock', values='Shares', title='Stock Holdings Distribution')
+    st.plotly_chart(fig)
+
 def main():
     initialize_session()
     st.title("Fantasy Stock League 🏆")
@@ -442,14 +465,15 @@ def main():
         current_user = st.session_state.current_user
         player = st.session_state.user_data[current_user]
         
-        # Display welcome message and user interface
         st.write(f"Welcome, {player['name']}!")
-        
+
+        # Display stock holdings pie chart
+        display_stock_spread(player)  # Display pie chart of stock holdings
+
         stock_name = st.text_input("Stock Ticker (e.g., AAPL, TSLA):")
         trade_type = st.selectbox("Trade Type:", ["Buy", "Sell"])
         shares = st.number_input("Number of Shares:", min_value=1, step=1)
 
-        # Display stock history chart above submit button
         display_stock_history(stock_name)
 
         if st.button("Submit Trade") and stock_name:
@@ -461,13 +485,13 @@ def main():
         st.write(f"Fantasy Score: {player['score']:.2f}")
         save_user_data()  # Save after score update
 
-        # Logout button
         if st.button("Logout"):
             st.session_state.clear()
             st.success("Logged out successfully.")
             st.rerun()
 
         display_leaderboard()
+
 
 if __name__ == "__main__":
     main()
